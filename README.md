@@ -8,6 +8,7 @@ dengan database di Aiven.
 
 ```
 app/
+  api/categories/route.js       -> GET daftar kategori dari MySQL
   api/products/route.js         -> GET (list), POST (create)
   api/products/[id]/route.js    -> GET (detail), PUT (update), DELETE
   page.js                       -> Halaman utama (tabel + form)
@@ -15,7 +16,7 @@ app/
   globals.css
 lib/
   db.js                         -> Koneksi pool MySQL (support SSL Aiven)
-schema.sql                      -> Skema tabel `products`
+schema.sql                      -> Skema tabel `products` dengan relasi ke `categories`
 .env.local.example              -> Contoh environment variables
 ```
 
@@ -25,7 +26,16 @@ schema.sql                      -> Skema tabel `products`
 2. Pilih region terdekat, tunggu status menjadi "Running".
 3. Buka tab **Overview**, catat: `Host`, `Port`, `User` (biasanya `avnadmin`), `Password`, `Database name` (default `defaultdb`).
 4. Download **CA Certificate** (`ca.pem`) dari halaman yang sama.
-5. Buat tabelnya. Bisa lewat Aiven Console (query editor) atau CLI MySQL:
+5. Pastikan tabel `categories` sudah tersedia dan berisi kategori yang akan
+   digunakan. `schema.sql` hanya membuat tabel `products` dan merujuk ke
+   `categories(id)`; file ini tidak membuat atau mengisi tabel kategori.
+   Pada database yang sudah memiliki `products`, `CREATE TABLE IF NOT EXISTS`
+   tidak mengubah struktur tabel. Skema database yang dikonfigurasi untuk
+   project ini telah diperiksa dan sudah memiliki `products.category_id` beserta
+   foreign key ke `categories.id`, sehingga tidak ada perubahan database
+   produksi yang perlu dijalankan.
+
+   Untuk database baru, jalankan setelah tabel `categories` tersedia:
    ```bash
    mysql --host=<HOST> --port=<PORT> --user=<USER> --password=<PASSWORD> \
      --database=<DBNAME> --ssl-mode=REQUIRED < schema.sql
@@ -94,13 +104,14 @@ Pastikan `.env.local` **tidak** ikut ter-commit (sudah otomatis diabaikan lewat 
 
 ## Fitur
 
-- **Create**: tambah produk baru lewat form (nama, deskripsi, harga)
-- **Read**: daftar semua produk otomatis dimuat saat halaman dibuka
-- **Update**: klik "Edit" pada baris produk untuk mengubah data
+- **Create**: tambah produk baru lewat form (nama, kategori, deskripsi, harga)
+- **Read**: daftar kategori diambil dari `GET /api/categories`; daftar dan detail
+  produk mengambil nama kategori melalui `LEFT JOIN`
+- **Update**: klik "Edit" pada baris produk untuk mengubah data, termasuk kategori
 - **Delete**: klik "Hapus" untuk menghapus produk (dengan konfirmasi)
 
 ## Catatan
 
 - Free tier Aiven MySQL bisa nonaktif otomatis setelah periode idle tertentu — kamu akan mendapat notifikasi email sebelum itu terjadi.
-- Kalau ingin menambah kolom atau tabel baru, cukup ubah `schema.sql` dan sesuaikan query di `app/api/products/`.
-- Untuk validasi input yang lebih ketat atau autentikasi (login admin), beri tahu saya — bisa ditambahkan.
+- API memvalidasi kategori terhadap tabel `categories`; foreign key menjaga
+  konsistensi relasi pada database.

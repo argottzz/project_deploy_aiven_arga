@@ -6,7 +6,11 @@ export async function GET() {
   try {
     const pool = getPool();
     const [rows] = await pool.query(
-      'SELECT id, name, description, price, created_at FROM products ORDER BY id DESC'
+      `SELECT p.id, p.name, p.description, p.price, p.category_id,
+              c.name AS category_name, p.created_at
+       FROM products p
+       LEFT JOIN categories c ON c.id = p.category_id
+       ORDER BY p.id DESC`
     );
     return NextResponse.json(rows);
   } catch (error) {
@@ -20,6 +24,13 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { name, description, price } = body;
+    const rawCategoryId = body.category_id;
+    const categoryId =
+      typeof rawCategoryId === 'number'
+        ? rawCategoryId
+        : typeof rawCategoryId === 'string' && /^\d+$/.test(rawCategoryId.trim())
+          ? Number(rawCategoryId)
+          : NaN;
 
     if (!name || price === undefined || price === '') {
       return NextResponse.json(
@@ -28,14 +39,39 @@ export async function POST(request) {
       );
     }
 
+    if (!Number.isSafeInteger(categoryId) || categoryId <= 0) {
+      return NextResponse.json(
+        { error: 'Kategori wajib dipilih dan harus valid' },
+        { status: 400 }
+      );
+    }
+
     const pool = getPool();
+    const [categories] = await pool.query(
+      'SELECT id, name FROM categories WHERE id = ?',
+      [categoryId]
+    );
+    if (categories.length === 0) {
+      return NextResponse.json(
+        { error: 'Kategori yang dipilih tidak ditemukan' },
+        { status: 400 }
+      );
+    }
+
     const [result] = await pool.query(
-      'INSERT INTO products (name, description, price) VALUES (?, ?, ?)',
-      [name, description || null, price]
+      'INSERT INTO products (name, description, price, category_id) VALUES (?, ?, ?, ?)',
+      [name, description || null, price, categoryId]
     );
 
     return NextResponse.json(
-      { id: result.insertId, name, description, price },
+      {
+        id: result.insertId,
+        name,
+        description,
+        price,
+        category_id: categoryId,
+        category_name: categories[0].name,
+      },
       { status: 201 }
     );
   } catch (error) {

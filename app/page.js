@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react';
 
-const emptyForm = { name: '', description: '', price: '' };
+const emptyForm = { name: '', description: '', price: '', category_id: '' };
 
 export default function Home() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [categoryError, setCategoryError] = useState('');
 
   async function loadProducts() {
     setLoading(true);
@@ -27,8 +30,26 @@ export default function Home() {
     }
   }
 
+  async function loadCategories() {
+    setCategoriesLoading(true);
+    setCategoryError('');
+    try {
+      const res = await fetch('/api/categories');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memuat daftar kategori');
+      setCategories(data);
+    } catch (err) {
+      setCategoryError(
+        `Daftar kategori gagal dimuat: ${err.message}. Coba muat ulang halaman.`
+      );
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadProducts();
+    loadCategories();
   }, []);
 
   function handleChange(e) {
@@ -42,6 +63,10 @@ export default function Home() {
       name: product.name,
       description: product.description || '',
       price: product.price,
+      category_id:
+        product.category_id === null || product.category_id === undefined
+          ? ''
+          : String(product.category_id),
     });
   }
 
@@ -96,6 +121,7 @@ export default function Home() {
       <p className="subtitle">Next.js + MySQL (Aiven)</p>
 
       {error && <div className="error-box">{error}</div>}
+      {categoryError && <div className="error-box">{categoryError}</div>}
 
       <div className="card">
         <h3>{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</h3>
@@ -110,6 +136,32 @@ export default function Home() {
               placeholder="Misal: Kopi Susu"
               required
             />
+          </div>
+
+          <div className="form-row">
+            <label htmlFor="category_id">Kategori</label>
+            <select
+              id="category_id"
+              name="category_id"
+              value={form.category_id}
+              onChange={handleChange}
+              required
+              disabled={categoriesLoading || Boolean(categoryError) || saving}
+            >
+              <option value="">
+                {categoriesLoading ? 'Memuat kategori...' : 'Pilih kategori'}
+              </option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            {!categoriesLoading && !categoryError && categories.length === 0 && (
+              <span className="field-message">
+                Belum ada kategori yang tersedia di database.
+              </span>
+            )}
           </div>
 
           <div className="form-row">
@@ -140,7 +192,16 @@ export default function Home() {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={saving}>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={
+                saving ||
+                categoriesLoading ||
+                Boolean(categoryError) ||
+                categories.length === 0
+              }
+            >
               {saving ? 'Menyimpan...' : editingId ? 'Update' : 'Simpan'}
             </button>
             {editingId && (
@@ -160,6 +221,7 @@ export default function Home() {
         <thead>
           <tr>
             <th>Nama</th>
+            <th>Kategori</th>
             <th>Deskripsi</th>
             <th>Harga</th>
             <th>Aksi</th>
@@ -169,6 +231,7 @@ export default function Home() {
           {products.map((p) => (
             <tr key={p.id}>
               <td>{p.name}</td>
+              <td>{p.category_name || '—'}</td>
               <td>{p.description}</td>
               <td>Rp {Number(p.price).toLocaleString('id-ID')}</td>
               <td>
